@@ -1,9 +1,16 @@
 import path from "path";
-import { fileURLToPath } from "url";
 import type { CollectionConfig } from "payload";
 
-const filename = fileURLToPath(import.meta.url);
-const dirname = path.dirname(filename);
+/**
+ * ⚠️ 媒体目录必须用 process.cwd() 算，**不能用 import.meta.url**。
+ *
+ * 原因：打包成 standalone 之后，这个模块会被塞进 .next/server/chunks/，
+ *       import.meta.url 指向那里，`../../public/media` 就算歪了 ——
+ *       后台传的图会存到一个奇怪的目录，容器一重建就丢。
+ *       process.cwd() 在容器里是 /app，正好对上 compose 挂的卷 /app/public/media。
+ */
+const MEDIA_DIR =
+  process.env.MEDIA_DIR || path.resolve(process.cwd(), "public/media");
 
 /**
  * 媒体库
@@ -16,7 +23,7 @@ export const Media: CollectionConfig = {
   labels: { singular: "媒体", plural: "媒体库" },
   admin: { group: "内容" },
   upload: {
-    staticDir: path.resolve(dirname, "../../public/media"),
+    staticDir: MEDIA_DIR,
     mimeTypes: ["image/*", "application/pdf"],
     imageSizes: [
       { name: "thumbnail", width: 400, height: 300, position: "centre" },

@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { buildConfig } from "payload";
 import { sqliteAdapter } from "@payloadcms/db-sqlite";
+import { postgresAdapter } from "@payloadcms/db-postgres";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
 import { multiTenantPlugin } from "@payloadcms/plugin-multi-tenant";
 import { en } from "@payloadcms/translations/languages/en";
@@ -64,14 +65,27 @@ export default buildConfig({
     outputFile: path.resolve(dirname, "payload-types.ts"),
   },
 
-  // 本地开发用 SQLite，零配置；正式部署换成 Postgres：
-  //   import { postgresAdapter } from "@payloadcms/db-postgres";
-  //   db: postgresAdapter({ pool: { connectionString: process.env.DATABASE_URL } })
-  db: sqliteAdapter({
-    client: {
-      url: process.env.DATABASE_URL || "file:./payload.db",
-    },
-  }),
+  /**
+   * 数据库适配器按 DATABASE_URL 自动选择：
+   *   本地开发 → SQLite（零配置，一个文件）
+   *   生产部署 → PostgreSQL（compose 里的 db 服务）
+   *
+   * ⚠️ 关于 push: true —— 这是**过渡方案**，用之前要知道代价：
+   *    好处：第一次上线不用折腾迁移文件，容器起来表就自动建好。
+   *    风险：以后表结构改了、库里又有真实客户数据时，push 可能**改动甚至删列**。
+   *    所以：**一旦有真实客户数据，就必须改成正规迁移**（payload migrate），
+   *          把这里换成 push: false 并提交迁移文件。
+   */
+  db: (process.env.DATABASE_URL || "").startsWith("postgres")
+    ? postgresAdapter({
+        pool: { connectionString: process.env.DATABASE_URL },
+        push: true,
+      })
+    : sqliteAdapter({
+        client: {
+          url: process.env.DATABASE_URL || "file:./payload.db",
+        },
+      }),
 
   // 图片裁剪 / 缩略图
   sharp,
