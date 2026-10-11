@@ -242,25 +242,27 @@
 # 	import proxy_to_site
 # }
 
-# --- 3) 通配子域名：所有客户的 客户名.shangbangbang.com -----------------------
+# --- 3) 客户子域名：客户名.shangbangbang.com ---------------------------------
 #
-# ⚠️ 重要：这个站点块要成功启动，必须在「全局设置」里配上 acme_dns，
-#    并且用带 DNS 插件的 Caddy 镜像。否则证书签不出来，
-#    Caddy 日志里会是 ACME 验证失败，站点直接 502 / 握手失败。
+# ⚠️⚠️ 这里**故意不用通配符** `*.{$ROOT_DOMAIN}`。
 #
-# ⚠️ 另一个坑（很容易踩）：
-#    如果在全局开了 `acme_dns cloudflare ...`，那么**所有**证书都会改成走
-#    DNS 验证。包括上面第 1 段的门户域名 —— 也就是说门户域名也在
-#    Cloudflare 上的话没问题，但如果门户域名 NS 在别家（比如阿里云、腾讯云），
-#    门户那段就会签不出来。
-#    稳妥做法二选一：
-#      a) 把门户域名和外贸站域名的 NS 都放在同一家（推荐）
-#      b) 不开全局 acme_dns，改成在下面这个站点块里面写 tls 段，只对通配生效：
-#         tls {
-#             dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-#         }
-#    （b 写法的 dns 子指令名字同样是插件相关的，需自行确认。）
-*.{$ROOT_DOMAIN} {
+#    原因：通配符证书**只能用 DNS 验证**（acme_dns），而官方 caddy:2-alpine
+#    镜像不带任何 DNS 插件。直接写通配符的后果是：
+#    证书一直签不出来 → Caddy 日志里全是 ACME 报错 → 所有子域名握手失败打不开。
+#
+#    所以这里用「逐个域名」的写法：Caddy 对每个域名走 HTTP-01 自动签**单域名证书**，
+#    零 DNS 配置、零额外镜像，起来就能用。
+#
+#    代价：**每加一个新客户，要在这里加一行**，然后 restart caddy：
+#        docker compose restart caddy
+#    （加之前先确认域名的 DNS 已经解析到这台服务器，否则会签失败被 CA 限流。）
+#
+#    等客户多到嫌这个麻烦了，再上通配符：用 xcaddy 自己编译一个带 DNS 插件的
+#    Caddy 镜像、配好全局 acme_dns，然后把下面这段换回 `*.{$ROOT_DOMAIN} { ... }`。
+#    做法见本文件顶部全局设置里的注释，以及 README「DNS 怎么配」。
+hengxin-tools.{$ROOT_DOMAIN},
+ruitai-machinery.{$ROOT_DOMAIN},
+acme-tools.{$ROOT_DOMAIN} {
 	import site_common
 	import proxy_to_site
 }
