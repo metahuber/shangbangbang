@@ -149,6 +149,19 @@ export async function getHeroPoints(siteSlug: string): Promise<string[]> {
     .filter((x: unknown): x is string => typeof x === "string");
 }
 
+/** 收款方式 —— 买家决定联系你之前会看这个 */
+export async function getPaymentTerms(
+  siteSlug: string,
+): Promise<{ method: string; detail: string }[]> {
+  const s = await getSettings(siteSlug);
+  return (s?.paymentTerms ?? [])
+    .map((p: any) => ({
+      method: String(p.method ?? ""),
+      detail: String(p.detail ?? ""),
+    }))
+    .filter((p: { method: string; detail: string }) => p.method && p.detail);
+}
+
 export async function getStats(siteSlug: string): Promise<Stat[]> {
   const s = await getSettings(siteSlug);
   return (s?.stats ?? []).map((x: any) => ({

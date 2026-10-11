@@ -418,6 +418,22 @@ export interface SiteSetting {
   id: number;
   tenant?: (number | null) | Tenant;
   /**
+   * ⚠️ 很重要：买家在决定联系你之前，会先看你怎么收款。写清楚（T/T、L/C、PayPal）本身就是信任信号；写「只接受私下转账」会直接吓跑人。
+   */
+  paymentTerms?:
+    | {
+        /**
+         * 例如 T/T、L/C、PayPal
+         */
+        method: string;
+        /**
+         * 例如 30% deposit, 70% against B/L copy
+         */
+        detail: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
    * 首页最上面那三条打勾的短句。每个客户写自己的。
    */
   heroPoints?:
@@ -775,6 +791,13 @@ export interface InquiriesSelect<T extends boolean = true> {
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
   tenant?: T;
+  paymentTerms?:
+    | T
+    | {
+        method?: T;
+        detail?: T;
+        id?: T;
+      };
   heroPoints?:
     | T
     | {

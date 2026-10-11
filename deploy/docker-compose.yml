@@ -114,6 +114,13 @@ services:
         # middleware 的打包产物，运行期再改不生效）
         NEXT_PUBLIC_ROOT_DOMAIN: ${ROOT_DOMAIN}
         DEFAULT_SITE: ${DEFAULT_SITE}
+        # 第三方接入（都是「填了就生效、没填自动跳过」）
+        # NEXT_PUBLIC_ 前缀的值会被**内联进前端产物**，所以必须走构建参数；
+        # 改完要重新 build 才生效，只 restart 没用。
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_TAWK_PROPERTY_ID: ${NEXT_PUBLIC_TAWK_PROPERTY_ID:-}
+        NEXT_PUBLIC_TAWK_WIDGET_ID: ${NEXT_PUBLIC_TAWK_WIDGET_ID:-}
+        GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}
     image: shangbangbang/foreign-site:${SITE_IMAGE_TAG:-latest}
     container_name: sbb-site
     restart: unless-stopped
@@ -130,6 +137,9 @@ services:
       DEFAULT_SITE: ${DEFAULT_SITE}
       # 启动时先跑一次 payload migrate（首次上线设 true，跑完改回 false）
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
+      # 新询盘通知：企业微信 / 飞书机器人 webhook（不填就只写日志）
+      # 代码见 app/api/inquiry/route.ts，填上**不用改代码**就生效
+      INQUIRY_WEBHOOK_URL: ${INQUIRY_WEBHOOK_URL:-}
     volumes:
       # Payload 上传的图片/PDF 都落在这里
       - media:/app/public/media

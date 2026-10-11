@@ -122,8 +122,14 @@ export default function Footer({
           <p>
             © {year} {site.name}. All rights reserved.
           </p>
-          <p className="text-slate-500">
-            {site.domain} · 本页面为模板样板，内容为虚构示例
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link href="/privacy" className="transition hover:text-white">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="transition hover:text-white">
+              Terms of Service
+            </Link>
+            <span className="text-slate-600">{site.domain}</span>
           </p>
         </div>
       </div>

@@ -3,6 +3,8 @@ import "../../globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
+import CookieConsent from "@/components/CookieConsent";
+import TawkChat from "@/components/TawkChat";
 import { getSite, getCategories, getAllSiteSlugs } from "@/lib/cms";
 
 /**
@@ -50,6 +52,11 @@ export async function generateMetadata({
       canonical: "/",
       // 接入多语言后，这里会按 site.locales 生成 hreflang 互指
     },
+    // Google Search Console 验证：在 GSC 拿到验证码后填到 .env 即可生效
+    // （没填就不输出这个 meta，不影响其他功能）
+    ...(process.env.GOOGLE_SITE_VERIFICATION
+      ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+      : {}),
     robots: { index: true, follow: true },
   };
 }
@@ -107,6 +114,10 @@ export default async function SiteLayout({
         <main className="flex-1">{children}</main>
         <Footer site={site} categories={categories} />
         {site.whatsapp && <WhatsAppButton number={site.whatsapp} />}
+        {/* 在线聊天：没配环境变量时自动不加载 */}
+        <TawkChat />
+        {/* Cookie 同意 + GA4（GA 只在访客同意后才加载） */}
+        <CookieConsent />
       </body>
     </html>
   );

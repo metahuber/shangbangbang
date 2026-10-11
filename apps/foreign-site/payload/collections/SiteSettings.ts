@@ -17,6 +17,41 @@ export const SiteSettings: CollectionConfig = {
   },
   fields: [
     {
+      name: "paymentTerms",
+      type: "array",
+      label: "收款方式",
+      labels: { singular: "方式", plural: "收款方式" },
+      admin: {
+        description:
+          "⚠️ 很重要：买家在决定联系你之前，会先看你怎么收款。写清楚（T/T、L/C、PayPal）本身就是信任信号；写「只接受私下转账」会直接吓跑人。",
+      },
+      fields: [
+        {
+          type: "row",
+          fields: [
+            {
+              name: "method",
+              type: "text",
+              label: "方式",
+              required: true,
+              admin: { width: "30%", description: "例如 T/T、L/C、PayPal" },
+            },
+            {
+              name: "detail",
+              type: "text",
+              label: "说明",
+              required: true,
+              localized: true,
+              admin: {
+                width: "70%",
+                description: "例如 30% deposit, 70% against B/L copy",
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
       name: "heroPoints",
       type: "array",
       label: "首屏要点",

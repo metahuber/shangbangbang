@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Section, SectionHeading, Container } from "@/components/Section";
 import Photo from "@/components/Photo";
 import InquiryForm from "@/components/InquiryForm";
-import { getSite } from "@/lib/cms";
+import { getSite, getPaymentTerms } from "@/lib/cms";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -17,7 +17,10 @@ export default async function ContactPage({
   params: Promise<{ site: string }>;
 }) {
   const { site: siteSlug } = await params;
-  const site = await getSite(siteSlug);
+  const [site, paymentTerms] = await Promise.all([
+    getSite(siteSlug),
+    getPaymentTerms(siteSlug),
+  ]);
 
   const channels = [
     {
@@ -134,6 +137,39 @@ export default async function ContactPage({
           </div>
         </div>
       </Section>
+
+      {/* 收款方式 —— B2B 买家在问价格之前，往往先问这个 */}
+      {paymentTerms.length > 0 && (
+        <Section>
+          <SectionHeading
+            eyebrow="Payment Terms"
+            title="How to pay us"
+            desc="Most buyers ask this before they ask for a price. So here it is, up front."
+          />
+          <div className="mx-auto max-w-3xl overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <dl className="divide-y divide-slate-200">
+              {paymentTerms.map((p) => (
+                <div
+                  key={p.method}
+                  className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:gap-8"
+                >
+                  <dt className="w-36 shrink-0 text-sm font-bold text-brand-800">
+                    {p.method}
+                  </dt>
+                  <dd className="text-sm leading-relaxed text-slate-600">
+                    {p.detail}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-slate-500">
+            Final payment terms are confirmed in the proforma invoice.
+            Third-party bank charges are payable by the buyer unless stated
+            otherwise.
+          </p>
+        </Section>
+      )}
 
       <Section bg="slate">
         <SectionHeading

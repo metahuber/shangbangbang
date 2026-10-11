@@ -172,6 +172,11 @@ const ruitai = {
     },
   ],
   settings: {
+    paymentTerms: [
+      { method: "T/T", detail: "30% deposit before production, 70% before shipment." },
+      { method: "L/C", detail: "Irrevocable L/C at sight." },
+      { method: "Western Union", detail: "For sample payments only." },
+    ],
     heroPoints: [
       { text: "72-hour trial run on your own product before shipment" },
       { text: "One engineer on site for installation and operator training" },
@@ -349,6 +354,11 @@ async function seed() {
   await payload.create({
     collection: "site-settings",
     data: {
+      paymentTerms: [
+        { method: "T/T", detail: "30% deposit, 70% against B/L copy. Standard for all orders." },
+        { method: "L/C", detail: "L/C at sight accepted for orders above USD 50,000." },
+        { method: "PayPal", detail: "For samples and orders under USD 500." },
+      ],
       heroPoints: [
         { text: "Direct from the factory — no trading company in between" },
         { text: "Samples ready in 7 working days" },
@@ -469,6 +479,7 @@ async function seed() {
   await payload.create({
     collection: "site-settings",
     data: {
+      paymentTerms: ruitai.settings.paymentTerms,
       heroPoints: ruitai.settings.heroPoints,
       stats: ruitai.settings.stats,
       capabilities: ruitai.settings.capabilities,
