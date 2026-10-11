@@ -1,0 +1,12 @@
+# 统一用 LF 换行
+#
+# 为什么必须写这个文件：
+#   Windows 上 core.autocrlf 通常是 true，checkout 时会把 LF 转成 CRLF。
+#   而 entrypoint.sh 一旦是 CRLF，Linux 容器启动会直接报：
+#       /app/entrypoint.sh: not found
+#   或者 bad interpreter —— 报错信息完全看不出是换行符问题，极难排查。
+#
+#   加了这一行之后：不管在 Windows 还是 Linux 上 checkout，都是 LF。
+#
+# 影响范围：所有文本文件。项目里没有 .bat / .cmd，所以强制 LF 是安全的。
+* text=auto eol=lf
