@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* 品牌主色：深蓝——B2B 场景的信任色 */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe7ff;
+  --color-brand-200: #bdd2ff;
+  --color-brand-300: #90b2ff;
+  --color-brand-400: #5c88fb;
+  --color-brand-500: #3661f0;
+  --color-brand-600: #2145d6;
+  --color-brand-700: #1b35ad;
+  --color-brand-800: #1a2f8a;
+  --color-brand-900: #1a2c6e;
+  --color-brand-950: #131d45;
+
+  /* 强调色：暖橙——只用在 CTA，形成对比 */
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: var(--color-slate-700);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 中文标题字重补偿：中文在小字重下偏细 */
+h1,
+h2,
+h3 {
+  color: var(--color-slate-900);
+  letter-spacing: -0.01em;
+}

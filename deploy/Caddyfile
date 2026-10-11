@@ -1,0 +1,352 @@
+# =============================================================================
+# 商帮帮 —— Caddy 配置（反向代理 + 自动 HTTPS）
+#
+# 一台服务器上有**两个应用**，靠访问的 Host 头分流：
+#
+#   shangbangbang.com / www.shangbangbang.com   →  portal:3000（门户官网）
+#   *.shangbangbang.com（客户子域名）            →  site:3000  （外贸站）
+#   客户自己的域名（如 factory-a.com）           →  site:3000  （外贸站）
+#
+# ⚠️ 两个应用的页面路径**都是 /`**，唯一的区别就是域名。
+#    所以站点块必须分开写，绝不能合成一个块 —— 一旦合错，
+#    表现就是「打开 shangbangbang.com 出来一个客户的外贸站」。
+#
+# 读这个文件前先记住三件事：
+#   1) Caddy 会自动申请并续期证书，你不需要手工买 SSL。
+#   2) 外贸站靠 Host 头判断「现在访问的是哪个客户的站点」，所以 Host 必须原样传下去。
+#   3) 通配符证书（*.shangbangbang.com）**只能用 DNS 验证**申请，
+#      而官方 Caddy 镜像里没有 DNS 插件，需要自己编译一个（见下面「方案 A」）。
+#      不想折腾就用「方案 B」：子域名一个一个写，Caddy 自动签单域名证书，
+#      这条路是零配置的，而且每个子域名天然就是一张独立证书。
+#
+# 本文件里的 {$PORTAL_DOMAIN} / {$ROOT_DOMAIN} / {$ACME_EMAIL} / {env.XXX}
+# 都是环境变量，值来自 deploy/.env
+# （docker-compose.yml 里把变量透传给了 caddy 容器）。
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 全局设置
+# -----------------------------------------------------------------------------
+{
+	# ACME 账号邮箱：证书快过期、CA 出问题时 CA 会发邮件到这里
+	email {$ACME_EMAIL}
+
+	# 默认用 Let's Encrypt。第一次调试建议先换成 staging，
+	# 否则证书签失败次数多了会被 LE 限流（一周内很难再签成功）。
+	# staging 的证书浏览器不认，只用来验证「链路通不通」。
+	# 换法：把下面这行取消注释；签发成功后改回来再重启 caddy。
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+
+	# ⚠️⚠️ 通配符证书的关键就在下面这行 ⚠️⚠️
+	#
+	# 通配符域名（*.shangbangbang.com）**不可能**用 HTTP-01 / TLS-ALPN 验证：
+	# 那种验证要求 CA 直接访问 *.shangbangbang.com，而通配符本身不是一个能解析的主机名。
+	# 所以唯一办法是 DNS-01 验证：让 Caddy 往你的 DNS 里写一条 TXT 记录，CA 去查。
+	# 这就意味着 —— Caddy 必须持有你的 DNS 服务商 API 凭据。
+	#
+	# 语法：acme_dns <provider模块名> <凭据...>
+	# 这里的 <provider模块名> **不是随便填的**，必须是下面这种 xcaddy 模块名的后缀，
+	# 而且要和你自己编译的 Caddy 镜像里装进去的插件对上：
+	#
+	#   Cloudflare       → cloudflare    （DNS_API_TOKEN 或 CLOUDFLARE_API_TOKEN）
+	#   阿里云 DNS        → alidns        （ALICLOUD_ACCESS_KEY / ALICLOUD_SECRET_KEY）
+	#   腾讯云 DNSPod     → dnspod        （TENCENTCLOUD_SECRET_ID / TENCENTCLOUD_SECRET_KEY）
+	#   华为云 DNS        → huaweicloud   （凭据名以该插件文档为准）
+	#
+	# ⚠️ 每个插件的凭据字段名、模块名都不一样，用之前**必须自己确认**：
+	#    插件列表：https://caddyserver.com/download （勾选 dns.providers.xxx）
+	#    凭据写法以对应插件的 README 为准（github.com/caddy-dns/<provider>）。
+	#
+	# 下面这行是 Cloudflare 的例子（用之前先确认你的域名 NS 是不是托管在 Cloudflare）：
+	#
+	# acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+
+	# 服务器级超时：别让慢连接把 worker 占死
+	servers {
+		timeouts {
+			# 客户端把请求头读完的最长时间
+			read_header 20s
+			# 客户端把请求体（图片上传）传完的最长时间
+			read_body 300s
+			# 写响应的最长时间
+			write 300s
+			# 空闲长连接保留多久
+			idle 5m
+		}
+	}
+
+	# 想让日志更啰嗦（排查证书问题时很有用）就取消注释，
+	# 它会输出 DEBUG 级别日志，平时别开。
+	# debug
+}
+
+# =============================================================================
+# 公共片段（snippet）
+#   ⚠️ 这里故意拆成两套，**别图省事合成一套**：
+#     portal_common  —— 给门户用（面向国内客户，安全头宽松一点）
+#     site_common    —— 给外贸站用（带 /admin 后台的特殊处理）
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 门户专用片段
+#   ⚠️ 门户是**面向国内客户**的：客户在国内用手机点开 shangbangbang.com 看介绍、
+#      填留资表单。所以：
+#      * 不做后台相关的 noindex / 禁 iframe（门户没有后台）
+#      * 缓存和压缩要正常，国内访问本来就慢，页面越小越好
+#      * 将来如果要接国内 CDN，注意 Caddy 这边的证书和 Host 透传别被改掉
+# -----------------------------------------------------------------------------
+(portal_common) {
+	# 压缩。Caddy 支持 zstd 和 gzip，不支持 br。
+	# 默认就是 zstd + gzip，写出来是为了让你知道有这回事、可以调。
+	encode zstd gzip
+
+	# 安全响应头（按需增删）
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# 不暴露后端技术栈
+		-Server
+	}
+
+	# 访问日志（排查「门户和外贸站搞混了」这类问题全靠它）
+	log {
+		output stdout
+		format console
+	}
+}
+
+# -----------------------------------------------------------------------------
+# 外贸站公共片段（所有客户站点共用这一套规则）
+#   改这里 = 改所有客户站点。加客户时不用重复抄。
+# -----------------------------------------------------------------------------
+(site_common) {
+	# 压缩。Caddy 支持 zstd 和 gzip，不支持 br。
+	# 默认就是 zstd + gzip，写出来是为了让你知道有这回事、可以调。
+	encode zstd gzip
+
+	# 安全响应头（按需增删）
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# 不暴露后端技术栈
+		-Server
+	}
+
+	# 后台相关：不允许被 iframe 嵌套，也不让搜索引擎收录
+	# （matcher 换成 path_regexp 是为了把 /admin 本身也匹配上）
+	@admin path_regexp ^/admin
+	header @admin X-Frame-Options DENY
+	header @admin X-Robots-Tag "noindex, nofollow"
+
+	# 访问日志（排查「打开的是另一个客户的站点」这类问题全靠它）
+	log {
+		output stdout
+		format console
+	}
+}
+
+# -----------------------------------------------------------------------------
+# 反向代理到 portal:3000（门户官网）
+# -----------------------------------------------------------------------------
+(proxy_to_portal) {
+	reverse_proxy portal:3000 {
+		# Host 相关头透传。
+		# 门户本身**不靠 Host 判断站点**（它只有一个站点），
+		# 但这里照样显式写出来，理由有两个：
+		#   1. 和 (proxy_to_site) 保持一致的写法，读配置的人不用记两套规则；
+		#   2. 门户将来如果要按域名做跳转/统计，Host 现成就是对的。
+		header_up Host {host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# 超时
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+
+		# 后端挂了先等一下、重试一次，而不是立刻甩 502
+		lb_try_duration 5s
+	}
+}
+
+# -----------------------------------------------------------------------------
+# 反向代理到 site:3000（外贸站）
+#
+# ⭐ Host 透传（最关键的一段）：
+#   Caddy 默认就会把原始 Host 头原样传给后端，但这里**显式写出来**，
+#   原因有两个：
+#     1. 让读配置的人一眼看到「Host 是要传的」，不会在换反代软件时漏掉；
+#     2. 万一以后有人在上面加了一层 CDN，显式写法能保证行为不变。
+#   应用侧靠它工作的位置：middleware.ts → lib/tenant.ts 的 resolveSiteSlug()
+#   把 hx-tools.shangbangbang.com 算成站点标识 hx-tools。
+#   如果 Host 被改成 site:3000，所有域名都会落到默认站点 —— 也就是
+#   「打开的是另一个客户的站点」这个经典故障。
+# -----------------------------------------------------------------------------
+(proxy_to_site) {
+	reverse_proxy site:3000 {
+		# ⭐⭐ 三个 Host 相关头，一个都不能少 ⭐⭐
+		header_up Host {host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# 超时
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+
+		# 后端挂了先等一下、重试一次，而不是立刻甩 502
+		lb_try_duration 5s
+	}
+}
+
+# =============================================================================
+# 站点定义
+#   ⚠️ 铁律：**同一个域名只能出现在一个站点块里**。
+#      重复出现（哪怕一个写全名、一个被通配符覆盖）Caddy 会直接报错起不来。
+#      排查方法见本文件最下面「域名撞车怎么查」。
+# =============================================================================
+
+# --- 1) 门户：根域名 + www ---------------------------------------------------
+#
+# 门户是商帮帮自己的官网（纯静态页 + 留资接口 /api/lead），
+# 访问者是**国内客户**，所以在国内的可访问性比外贸站更要紧。
+#
+# ⚠️ PORTAL_DOMAIN 在 .env 里的**默认值就是 ROOT_DOMAIN（shangbangbang.com）**。
+#    这种「门户占根域名、外贸站只占子域名」的安排是推荐的，理由：
+#      * 根域名和 www 给门户，主页干净、好记，符合国内客户的直觉；
+#      * 外贸站的客户全部走 客户名.shangbangbang.com，本来就不需要根域名；
+#      * 两个站点块的域名**完全不重叠**，永远不会撞车。
+{$PORTAL_DOMAIN}, www.{$PORTAL_DOMAIN} {
+	import portal_common
+	import proxy_to_portal
+}
+
+# --- 2) 外贸站的根域名（**只在门户用了别的域名时才需要打开**）------------------
+#
+# ⚠️⚠️ 这一块默认是注释掉的，原因就是上面那条铁律：
+#    如果 PORTAL_DOMAIN = shangbangbang.com（默认），那么
+#    shangbangbang.com 已经被第 1 块占了，这里再写一遍 → **Caddy 直接报错起不来**。
+#
+# 什么时候需要打开它：你把 PORTAL_DOMAIN 改成了别的域名
+# （比如门户用 shangbangbang.cn），这时 shangbangbang.com 没人认领，
+# 想让「直接访问根域名」也能打开外贸站的默认站点，就取消下面这段的注释。
+#
+# 注意：这样一来外贸站就占了「根域名 + 通配子域名」，
+# 而 www.shangbangbang.com 会被通配符 *.shangbangbang.com 覆盖（见第 3 段），
+# 所以**不要**在这里再写 www。
+#
+# {$ROOT_DOMAIN} {
+# 	import site_common
+# 	import proxy_to_site
+# }
+
+# --- 3) 通配子域名：所有客户的 客户名.shangbangbang.com -----------------------
+#
+# ⚠️ 重要：这个站点块要成功启动，必须在「全局设置」里配上 acme_dns，
+#    并且用带 DNS 插件的 Caddy 镜像。否则证书签不出来，
+#    Caddy 日志里会是 ACME 验证失败，站点直接 502 / 握手失败。
+#
+# ⚠️ 另一个坑（很容易踩）：
+#    如果在全局开了 `acme_dns cloudflare ...`，那么**所有**证书都会改成走
+#    DNS 验证。包括上面第 1 段的门户域名 —— 也就是说门户域名也在
+#    Cloudflare 上的话没问题，但如果门户域名 NS 在别家（比如阿里云、腾讯云），
+#    门户那段就会签不出来。
+#    稳妥做法二选一：
+#      a) 把门户域名和外贸站域名的 NS 都放在同一家（推荐）
+#      b) 不开全局 acme_dns，改成在下面这个站点块里面写 tls 段，只对通配生效：
+#         tls {
+#             dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+#         }
+#    （b 写法的 dns 子指令名字同样是插件相关的，需自行确认。）
+*.{$ROOT_DOMAIN} {
+	import site_common
+	import proxy_to_site
+}
+
+# --- 4) 客户自己的域名（客户不想用子域名，绑自己的 factory-a.com）------------
+#
+# 客户自己的域名**不能用通配符证书**（那是人家的域名），
+# 但好消息是：不需要任何 DNS 验证，Caddy 用 HTTP-01 自动签单域名证书。
+# 你要做的只有两步：
+#   ① 让客户把域名 A 记录解析到这台服务器的公网 IP（见 README「DNS 怎么配」）
+#   ② 把下面这段复制一份，把域名改成客户的，然后 `docker compose restart caddy`
+#
+# ⚠️ 顺序反了会签失败：**先解析、后加配置**。DNS 还没生效就加，
+#    Caddy 会立刻尝试签发并失败，失败次数多了会被 CA 限流。
+#    查 DNS 有没有生效：dig +short factory-a.com
+#
+# ⚠️ 顺带记住：客户自己的域名**不要**和门户域名写成同一个 —— 那一定撞车。
+#
+# 复制这段（记得把域名和注释一起去掉；缩进用 Tab）：
+#
+# factory-a.com {
+# 	import site_common
+# 	import proxy_to_site
+# }
+#
+# 客户还带 www 的话，Caddy 支持一行写多个域名（证书里会包含这两个名字）：
+#
+# factory-a.com, www.factory-a.com {
+# 	import site_common
+# 	import proxy_to_site
+# }
+#
+# --- 5) 兜底：完全没配过的域名 -------------------------------------------------
+# 不写这个块的话，访问一个没配过的域名会连到默认站点（也就是某个客户的网站），
+# 这看起来像事故。写上以后，陌生域名会明确告诉你「这个域名没配」。
+#
+# 注意：这个块会抢「所有没被上面规则匹配到的域名」的证书申请，
+# 因为你如果给它加 tls internal，就等于告诉 Caddy「这些名字用本地自签证书」，
+# 反过来还会影响正常域名的自动签发。所以**不要**在上面任何东西跑通之前打开它。
+# 真要打开，用下面这种只回 404、不碰证书的写法更安全：
+#
+# :443 {
+# 	respond "This domain is not configured yet. / 这个域名还没有绑定站点。" 404
+# }
+
+# =============================================================================
+# ⭐ 域名撞车怎么查（Caddy 起不来最常见的原因）
+# =============================================================================
+#
+# 症状：改完这个文件 `docker compose restart caddy` 之后，
+#       caddy 容器反复重启 / 直接 Exited，日志里是类似这样的报错：
+#
+#   Error: loading initial config: loading new config:
+#   http app: loading sites: site "shangbangbang.com": ...
+#   ambiguous site definition  /  duplicated route  /  host already defined
+#
+# （**具体的报错原文随 Caddy 版本变化，以实际日志为准**，别照抄上面的字面。）
+#
+# 根因只有一个：**同一个域名被两个站点块认领了**。
+# 最常见的两种写法：
+#   ① 门户块写了 shangbangbang.com，同时又取消了第 2 段外贸站根域名块的注释
+#      → 根域名被写了两遍。
+#   ② 把 PORTAL_DOMAIN 改成了 shangbangbang.com 的子域名
+#      （比如 portal.shangbangbang.com）→ 它同时被门户块和 *.shangbangbang.com 通配块覆盖。
+#      ⚠️ 记住：门户域名要么就是根域名本身，要么是**完全另一套域名**，
+#      绝不能是 *.{$ROOT_DOMAIN} 底下的子域名。
+#
+# 三步排查：
+#
+#   1) 把 caddy 的报错原样打出来（它会直接点出是哪个域名）：
+#        cd /srv/shangbangbang/deploy
+#        docker compose logs --tail=100 caddy
+#
+#   2) 在服务器上确认 .env 里这两个域名到底是不是同一个：
+#        grep -E "PORTAL_DOMAIN|ROOT_DOMAIN" .env
+#
+#   3) 人工粗筛：把站点块的域名一个个念出来，看有没有重的。
+#      简单办法是直接把「行首不是 # 或空白的行」打出来过一遍
+#      （域名、snippet 名、全局设置块都会一起打出来，自己挑出域名即可）：
+#        grep -vE "^[[:space:]]*(#|$)" Caddyfile
+#      ⚠️ 这只帮你肉眼找，不能代替第 1 步 —— 最终以 Caddy 的报错为准。
+#
+# 注意区分两类「撞车」，别修错地方：
+#   * **域名撞车（本段说的）**：同一个 host 出现在两个站点块 → 配置加载失败，
+#     caddy **起不来**，网站全挂。必须改配置。
+#   * **端口撞车**：portal 和 site 都想把 3000 映射到宿主机 80/443 → 起不来。
+#     本项目的 compose 里这两个服务**都没有 ports**，正常不会发生。
+#   * 证书签不出来（acme_dns / DNS 记录的问题）是**另一回事**：
+#     caddy 能起来，但握手失败或者浏览器提示不安全，排查见 README 第 9 步。

@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/**
+ * 样板站点主题 —— 恒信精密工具（虚构样例）
+ *
+ * 注意：这些是「模板级」的设计变量。
+ * 将来每个客户在后台改 Logo 和主色后，这里会被替换成动态值。
+ */
+
+@theme {
+  /* 主色：工业钢蓝，稳重、可信 */
+  --color-brand-50: #f2f7fb;
+  --color-brand-100: #e3eef7;
+  --color-brand-200: #c2dbec;
+  --color-brand-300: #90bcdb;
+  --color-brand-400: #5798c4;
+  --color-brand-500: #357ba9;
+  --color-brand-600: #26618c;
+  --color-brand-700: #204e72;
+  --color-brand-800: #1e425f;
+  --color-brand-900: #1d3950;
+  --color-brand-950: #132635;
+
+  /* 强调色：安全橙，用在 CTA —— 工业场景的经典搭配 */
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: var(--color-slate-600);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--color-slate-900);
+  letter-spacing: -0.015em;
+}
+
+/* 图片占位用的斜纹底 —— 让「这里以后放实拍图」看起来是有意为之 */
+.photo-placeholder {
+  background-color: #e2e8f0;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.55) 25%, transparent 25%),
+    linear-gradient(225deg, rgba(255, 255, 255, 0.55) 25%, transparent 25%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.55) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(255, 255, 255, 0.55) 25%, transparent 25%);
+  background-position:
+    12px 0,
+    12px 0,
+    0 0,
+    0 0;
+  background-size: 24px 24px;
+  background-repeat: repeat;
+}

@@ -1,0 +1,208 @@
+# =============================================================================
+# 商帮帮 · 生产编排（Docker Compose）—— 一台服务器跑两个站点
+#
+#   四个服务：
+#     db      PostgreSQL 16          —— 只有外贸站用，门户不连库
+#     site    Next.js 15 + Payload 3 —— 外贸独立站（多租户），内部监听 3000
+#     portal  Next.js 15 纯静态 + 留资接口 —— 门户官网，内部监听 3000
+#     caddy   反向代理 + 自动 HTTPS   —— 唯一对外开 80/443 的服务
+#
+#   为什么 portal 和 site 都监听 3000 却不冲突：
+#     它们是**两个不同的容器**，各自有独立的网络命名空间。
+#     只有把 3000 映射到宿主机（写 ports）才会撞端口 —— 而这两个服务
+#     都**故意不写 ports**，公网只能经由 caddy 访问。
+#
+# 用法（在 deploy/ 目录下执行）：
+#   cp .env.example .env        # 然后逐项填好，每一项都有中文说明
+#   docker compose build        # 第一次构建（两个应用一起）
+#   docker compose up -d        # 起全套
+#   docker compose logs -f      # 看日志
+#
+# ⚠️ 本文件里**没有任何明文密码**，所有敏感值都从同目录的 .env 读取。
+#    .env 千万不要提交到代码仓库。
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL —— 外贸站所有租户的数据都在这里
+  #   门户（portal）**不连这个库**，所以门户挂了/重建也不影响这里。
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: sbb-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # 初始化时就用 UTC，避免跨时区的时间字段解释不一致
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      # 具名卷：容器删了重新 up，数据还在
+      - pgdata:/var/lib/postgresql/data
+    # ⚠️ 故意不写 ports —— 数据库只在这个 compose 内网里可达，
+    #    公网绝对连不上。需要临时连进去调试时见 deploy/README.md「日常运维」。
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - web
+
+  # ---------------------------------------------------------------------------
+  # portal —— 商帮帮自己的门户官网（纯静态页面 + 留资接口 /api/lead）
+  #   * 不连数据库、不跑迁移，启动就是 node server.js
+  #   * 留资线索写 /app/data/leads.jsonl → 必须挂卷，否则重建容器就丢
+  # ---------------------------------------------------------------------------
+  portal:
+    build:
+      # 构建上下文就是门户应用目录本身（Dockerfile 也在那里）
+      context: ../apps/portal
+      dockerfile: Dockerfile
+      args:
+        # ⚠️ 构建期变量：Next.js 会把 NEXT_PUBLIC_* 内联进打包产物，
+        #    运行期再改 .env 不生效，必须重新 build portal。
+        #    它决定门户自己的 canonical 链接 / sitemap / robots 里写哪个域名。
+        NEXT_PUBLIC_SITE_URL: ${PORTAL_SITE_URL}
+    image: shangbangbang/portal:${PORTAL_IMAGE_TAG:-latest}
+    container_name: sbb-portal
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # ⚠️ 选填，默认注释掉：
+      #    填了就会把每条新线索 POST 到这个地址（企业微信机器人 / 飞书 / 自建接口）。
+      #    代码里的默认行为是「落盘 + 打控制台日志」，落盘只是临时方案，
+      #    正式上线建议改成写库或填这个 webhook —— 详见 README。
+      # LEAD_WEBHOOK_URL: ${LEAD_WEBHOOK_URL}
+    volumes:
+      # 留资线索（leads.jsonl）落在这里。
+      # 镜像里已经预建了 /app/data 并 chown 给 nextjs，
+      # 所以首次创建的空卷会继承正确属主，非 root 用户写得进去。
+      - portal_data:/app/data
+    networks:
+      - web
+    # ⚠️ 故意不写 ports —— portal 只让 caddy 通过内网访问，
+    #    公网无法绕过 Caddy 直接打 3000 端口。
+    healthcheck:
+      # 镜像里也有 HEALTHCHECK，这里再写一份是为了让 compose ps 直接显示健康状态
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # site —— 一套代码服务 N 个客户站点（外贸站）
+  #   * Caddy 把原始 Host 头传进来，middleware.ts 按域名算出站点标识
+  #   * 媒体上传目录 public/media 挂具名卷，重建容器不丢图
+  # ---------------------------------------------------------------------------
+  site:
+    build:
+      # 构建上下文就是应用目录本身（Dockerfile 也在那里）
+      context: ../apps/foreign-site
+      dockerfile: Dockerfile
+      args:
+        # 构建期是否连库，取决于 .env 里 DATABASE_URL 指向哪里：
+        #   占位值  → 构建成功但没有预渲染页面
+        #   db:5432 → 每个租户的页面全部预渲染（推荐第二次构建时用）
+        DATABASE_URL: ${DATABASE_URL}
+        # 下面两个是「构建期就要定下来」的（NEXT_PUBLIC_ 前缀的值会被内联进
+        # middleware 的打包产物，运行期再改不生效）
+        NEXT_PUBLIC_ROOT_DOMAIN: ${ROOT_DOMAIN}
+        DEFAULT_SITE: ${DEFAULT_SITE}
+    image: shangbangbang/foreign-site:${SITE_IMAGE_TAG:-latest}
+    container_name: sbb-site
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # 应用连数据库（容器内网走服务名 db，不是 localhost）
+      DATABASE_URL: ${DATABASE_URL}
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET}
+      # 租户识别相关（middleware.ts / lib/tenant.ts 会读）
+      NEXT_PUBLIC_ROOT_DOMAIN: ${ROOT_DOMAIN}
+      DEFAULT_SITE: ${DEFAULT_SITE}
+      # 启动时先跑一次 payload migrate（首次上线设 true，跑完改回 false）
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
+    volumes:
+      # Payload 上传的图片/PDF 都落在这里
+      - media:/app/public/media
+      # 迁移文件从宿主机只读挂进来：
+      # 迁移目录默认是 <cwd>/migrations，而命令行的工作目录是 /app/full
+      - ../apps/foreign-site/migrations:/app/full/migrations:ro
+    networks:
+      - web
+    # ⚠️ 故意不写 ports —— site 只让 caddy 通过内网访问，
+    #    公网无法绕过 Caddy 直接打 3000 端口。
+
+  # ---------------------------------------------------------------------------
+  # Caddy —— 反向代理 + 自动申请/续期 SSL 证书
+  #   对外只开 80 / 443
+  #
+  #   ⭐ 两个站点靠 Host 头分流，规则写在本目录的 Caddyfile 里：
+  #      shangbangbang.com / www.shangbangbang.com  →  portal:3000（门户）
+  #      *.shangbangbang.com / 客户自己的域名        →  site:3000（外贸站）
+  # ---------------------------------------------------------------------------
+  caddy:
+    # ⚠️ 如果要给 *.shangbangbang.com 申请通配符证书，必须换成自己编译的
+    #    带 DNS 插件的 Caddy 镜像（官方镜像里没有 DNS 插件）。
+    #    做法见 deploy/Caddyfile 顶部注释 和 deploy/README.md「DNS 怎么配」。
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    container_name: sbb-caddy
+    restart: unless-stopped
+    depends_on:
+      # 两个应用都起来再起 caddy。
+      # ⚠️ 这里只用「启动顺序」依赖，没等健康检查：caddy 先起来也无妨，
+      #    应用还没就绪时它会返回 502，应用起来后自动恢复。
+      - portal
+      - site
+    ports:
+      - "80:80"
+      - "443:443"
+      # 想开 HTTP/3 就取消下面这行，并在 Caddyfile 里打开 h3 的设置
+      # - "443:443/udp"
+    environment:
+      # Caddyfile 里用 {$PORTAL_DOMAIN} / {$ROOT_DOMAIN} / {$ACME_EMAIL} 读这三个值
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN}
+      ROOT_DOMAIN: ${ROOT_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      # DNS 服务商凭据（只有配了通配符证书才用得上）
+      # Caddyfile 里用 {env.DNS_API_TOKEN} 这类写法读取
+      DNS_API_TOKEN: ${DNS_API_TOKEN:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      ALICLOUD_ACCESS_KEY: ${ALICLOUD_ACCESS_KEY:-}
+      ALICLOUD_SECRET_KEY: ${ALICLOUD_SECRET_KEY:-}
+      TENCENTCLOUD_SECRET_ID: ${TENCENTCLOUD_SECRET_ID:-}
+      TENCENTCLOUD_SECRET_KEY: ${TENCENTCLOUD_SECRET_KEY:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 证书、私钥、ACME 账号：必须持久化，否则每次重启都重新签，很快触发 CA 限流
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
+  media:
+  # 门户的留资线索（/app/data/leads.jsonl）。
+  # ⚠️ 别在 down 的时候加 -v，这条卷会被一起删掉。
+  portal_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  web:
+    driver: bridge

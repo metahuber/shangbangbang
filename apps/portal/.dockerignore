@@ -1,0 +1,43 @@
+# 构建上下文 = apps/portal 目录
+# 这个文件的作用：别把下面这些东西塞进镜像，既慢又可能漏密钥
+# （和 apps/foreign-site/.dockerignore 保持同一套思路）
+
+# 依赖和构建产物（镜像里会重新装、重新编译）
+node_modules
+.next
+out
+dist
+
+# 环境变量：绝对不要进镜像！生产用 docker-compose 注入
+.env
+.env.*
+!.env.example
+
+# ⚠️ 下面是构建本身要用的文件，**不能**被忽略掉，
+#    否则 Dockerfile 进不了构建上下文，构建直接失败。
+!Dockerfile
+
+# 留资线索的落盘目录（apps/portal/data/leads.jsonl）：
+#   生产环境走 docker 具名卷 portal_data，宿主机上这份不进镜像，
+#   否则你本机调试时攒的假线索会被打进生产镜像。
+data
+
+# 门户的「内容检查」构建标记文件（package.json 的 prebuild 会删它）
+.content-report-done
+
+# 编辑器 / 系统垃圾
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Git 历史和文档
+.git
+.gitignore
+README.md
+
+# TypeScript 增量缓存
+tsconfig.tsbuildinfo
+next-env.d.ts

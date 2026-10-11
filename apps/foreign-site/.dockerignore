@@ -1,0 +1,43 @@
+# 构建上下文 = apps/foreign-site 目录
+# 这个文件的作用：别把下面这些东西塞进镜像，既慢又可能漏密钥
+
+# 依赖和构建产物（镜像里会重新装、重新编译）
+node_modules
+.next
+out
+dist
+
+# 本地数据库文件（SQLite 只用于开发，不要进镜像）
+payload.db
+payload.db-shm
+payload.db-wal
+
+# 环境变量：绝对不要进镜像！生产用 docker-compose 注入
+.env
+.env.*
+!.env.example
+
+# ⚠️ 下面两个是构建本身要用的文件，**不能**被忽略掉，
+#    否则 Dockerfile 和启动脚本都进不了构建上下文，构建直接失败。
+!Dockerfile
+!entrypoint.sh
+
+# 媒体文件：生产走 volume，不进镜像
+public/media
+
+# 编辑器 / 系统垃圾
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Git 历史和文档
+.git
+.gitignore
+README.md
+
+# TypeScript 增量缓存
+tsconfig.tsbuildinfo
+next-env.d.ts
