@@ -3,13 +3,49 @@ import PageHero from "@/components/PageHero";
 import { Section, SectionHeading, CtaLink } from "@/components/Section";
 import { site, CTA, TBD } from "@/content/site";
 import { processSteps } from "@/content/pricing";
-import { about } from "@/content/pages/about";
+import { about, type AboutBlock } from "@/content/pages/about";
 
 export const metadata: Metadata = {
   title: "关于我们",
   description:
     "商帮帮只做一件事：帮工厂和商铺把生意搬到线上。我们怎么做事、我们不做的事。",
 };
+
+/**
+ * 渲染 about.ts 里的 blocks。
+ * 支持三种：普通段落、小标题、要点列表。
+ */
+function Blocks({ items }: { items: AboutBlock[] }) {
+  return (
+    <>
+      {items.map((block, i) => {
+        if (block.type === "h") {
+          return (
+            <h3
+              key={`${block.type}-${i}`}
+              className="pt-2 text-lg font-bold text-slate-900"
+            >
+              {block.text}
+            </h3>
+          );
+        }
+        if (block.type === "ul") {
+          return (
+            <ul key={`${block.type}-${i}`} className="space-y-2.5">
+              {block.items.map((item) => (
+                <li key={item} className="flex items-start gap-3">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return <p key={`${block.type}-${i}`}>{block.text}</p>;
+      })}
+    </>
+  );
+}
 
 export default function AboutPage() {
   const companyKnown = site.companyName !== TBD;
@@ -31,7 +67,7 @@ export default function AboutPage() {
 
       {/* ===== 为什么做商帮帮 ===== */}
       <Section>
-        <div className="mx-auto max-w-3xl space-y-6 text-base leading-relaxed text-slate-700">
+        <div className="mx-auto max-w-3xl space-y-5 text-base leading-relaxed text-slate-700">
           <h2 className="text-xl font-bold text-slate-900">{about.why.title}</h2>
 
           {about.why.draftMode ? (
@@ -46,7 +82,7 @@ export default function AboutPage() {
               <p className="mt-3">{about.why.draftFooter}</p>
             </div>
           ) : (
-            about.why.paragraphs.map((p) => <p key={p}>{p}</p>)
+            <Blocks items={about.why.blocks} />
           )}
         </div>
       </Section>
@@ -54,18 +90,14 @@ export default function AboutPage() {
       {/* ===== 团队 ===== */}
       <Section bg="slate">
         <SectionHeading eyebrow={about.team.eyebrow} title={about.team.title} />
-        <div className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-700">
+        <div className="mx-auto max-w-3xl space-y-5 text-base leading-relaxed text-slate-700">
           {about.team.draftMode ? (
             <>
               <p>{about.team.draftPlaceholder}</p>
-              <p className="mt-3 text-slate-500">{about.team.draftHint}</p>
+              <p className="text-sm text-slate-500">{about.team.draftHint}</p>
             </>
           ) : (
-            about.team.paragraphs.map((p) => (
-              <p key={p} className="mt-2 first:mt-0">
-                {p}
-              </p>
-            ))
+            <Blocks items={about.team.blocks} />
           )}
         </div>
       </Section>

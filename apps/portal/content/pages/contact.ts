@@ -22,7 +22,7 @@ export const contact = {
     wechat: {
       label: "微信（推荐）",
       qrHint: "微信二维码",
-      qrSubHint: "待上传",
+      qrSubHint: "还没上传",
       note: "扫码加微信，直接聊。",
       note2: "有问题随时问，不用先想好怎么问。",
     },
