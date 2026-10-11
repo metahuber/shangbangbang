@@ -1,15 +1,13 @@
 /**
  * 价格与流程数据层
  *
- * ⚠️ 所有价格都是【待定】。建议区间写在注释里供决策，不渲染到页面。
- *    老板拍板后，只改这个文件即可。
+ * ⭐ 价格已定，直接改这里的数字即可。
  *
- * 建议区间（来自 docs/04 第五节，供内部参考，勿上页面）：
- *   外贸网站：体验 2,000–4,000/年｜标准 6,000–10,000/年｜品牌 15,000 起/年
- *   门店小程序：体验 1,500–3,000/年｜标准 4,000–8,000/年｜品牌 10,000 起/年
+ * 当前定价（老板 2026-10 拍板）：
+ *   外贸网站：2,680 / 5,888 / 13,800 起
+ *   门店小程序：1,980 / 3,980 / 9,800 起
+ *   定价逻辑见 docs/09-定价决策框架.md
  */
-
-export const PRICE_TBD = "价格待定";
 
 export type PriceTier = {
   name: string;
@@ -24,7 +22,7 @@ export type PriceTier = {
 export const websiteTiers: PriceTier[] = [
   {
     name: "体验版",
-    price: PRICE_TBD,
+    price: "¥2,680",
     unit: "/年",
     forWho: "适合先试试水的",
     features: [
@@ -38,7 +36,7 @@ export const websiteTiers: PriceTier[] = [
   },
   {
     name: "标准版",
-    price: PRICE_TBD,
+    price: "¥5,888",
     unit: "/年",
     forWho: "最受欢迎，适合多数工厂",
     highlight: true,
@@ -55,7 +53,7 @@ export const websiteTiers: PriceTier[] = [
   },
   {
     name: "品牌版",
-    price: PRICE_TBD,
+    price: "¥13,800",
     unit: "/年 起",
     forWho: "需要定制与代运营的",
     features: [
@@ -73,7 +71,7 @@ export const websiteTiers: PriceTier[] = [
 export const miniappTiers: PriceTier[] = [
   {
     name: "展示版",
-    price: PRICE_TBD,
+    price: "¥1,980",
     unit: "/年",
     forWho: "只需要线上门面的",
     features: [
@@ -86,7 +84,7 @@ export const miniappTiers: PriceTier[] = [
   },
   {
     name: "门店版",
-    price: PRICE_TBD,
+    price: "¥3,980",
     unit: "/年",
     forWho: "要点单、会员、活动的",
     highlight: true,
@@ -102,7 +100,7 @@ export const miniappTiers: PriceTier[] = [
   },
   {
     name: "连锁版",
-    price: PRICE_TBD,
+    price: "¥9,800",
     unit: "/年 起",
     forWho: "多门店统一管理的",
     features: [
@@ -120,7 +118,7 @@ export const miniappTiers: PriceTier[] = [
 export const priceNotes = [
   "价格含：建站、部署、SSL、备案指导、后台培训、维护期内技术支持",
   "不含：域名、服务器、短信等第三方费用（按实收，不加价）",
-  "支持：对公转账 / 微信 / 支付宝；发票事项待确认",
+  "支持：对公转账 / 微信 / 支付宝；可开发票，具体票种请联系确认",
 ];
 
 /** 交付流程——首页与关于我们共用 */

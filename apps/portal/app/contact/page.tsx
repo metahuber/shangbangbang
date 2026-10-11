@@ -1,9 +1,21 @@
 import type { Metadata } from "next";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import PageHero from "@/components/PageHero";
 import { Section, SectionHeading } from "@/components/Section";
 import LeadForm from "@/components/LeadForm";
 import { site, TBD } from "@/content/site";
 import { contact } from "@/content/pages/contact";
+
+/**
+ * 微信二维码：图片存在就显示真图，不存在就显示占位块。
+ *
+ * 这样你只要把图片丢进 `apps/portal/public/images/wechat-qr.png` 就够了，
+ * **不需要改任何代码**。构建期判断，不影响运行时性能。
+ */
+const wechatQrExists = existsSync(
+  path.join(process.cwd(), "public/images/wechat-qr.png"),
+);
 
 export const metadata: Metadata = {
   title: "联系我们",
@@ -47,18 +59,25 @@ export default function ContactPage() {
                   {contact.direct.wechat.label}
                 </p>
                 <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                  {/* ⚠️ 把微信二维码图片放到 public/images/wechat-qr.png 后，
-                      把下面的占位块换成：
-                      <img src="/images/wechat-qr.png" alt="商帮帮微信二维码" width={140} height={140} className="rounded-lg border border-slate-200" />
-                  */}
-                  <div className="flex h-[140px] w-[140px] shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-center">
-                    <span className="text-2xl">📱</span>
-                    <span className="text-[11px] leading-tight text-slate-500">
-                      {contact.direct.wechat.qrHint}
-                      <br />
-                      {contact.direct.wechat.qrSubHint}
-                    </span>
-                  </div>
+                  {wechatQrExists ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/images/wechat-qr.png"
+                      alt="商帮帮微信二维码"
+                      width={140}
+                      height={140}
+                      className="shrink-0 rounded-lg border border-slate-200"
+                    />
+                  ) : (
+                    <div className="flex h-[140px] w-[140px] shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-center">
+                      <span className="text-2xl">📱</span>
+                      <span className="text-[11px] leading-tight text-slate-500">
+                        {contact.direct.wechat.qrHint}
+                        <br />
+                        {contact.direct.wechat.qrSubHint}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-sm leading-relaxed text-slate-600">
                     {contact.direct.wechat.note}
                     <br />

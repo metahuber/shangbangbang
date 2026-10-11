@@ -133,7 +133,7 @@ export const products: Product[] = [
         a: "可以，属于定制范围，按实际需求评估。",
       },
     ],
-    priceNote: "价格待定",
+    priceNote: "¥2,680 起/年",
     highlight: true,
     order: 1,
   },
@@ -204,7 +204,7 @@ export const products: Product[] = [
         a: "标准门店版一般 7–15 天，含认证和审核时间另计。",
       },
     ],
-    priceNote: "价格待定",
+    priceNote: "¥1,980 起/年",
     highlight: true,
     order: 2,
   },
@@ -289,10 +289,10 @@ export const products: Product[] = [
       },
       {
         q: "怎么收费？",
-        a: "按量或包月，具体待定。",
+        a: "按月或按年订阅，也可以按次买。具体档位在价格页上，不会中途加价。",
       },
     ],
-    priceNote: "价格待定",
+    priceNote: "¥980/年 起",
     order: 4,
   },
   {
@@ -333,7 +333,7 @@ export const products: Product[] = [
         a: "可以，按你实际要开拓的市场来，不用全做。",
       },
     ],
-    priceNote: "价格待定",
+    priceNote: "¥1,500/语种/年",
     order: 5,
   },
   {
@@ -377,7 +377,7 @@ export const products: Product[] = [
         a: "界面尽量做得简单，我们也提供培训。关键是要有人推。",
       },
     ],
-    priceNote: "价格待定",
+    priceNote: "¥1,980/年",
     order: 6,
   },
   {
@@ -414,7 +414,7 @@ export const products: Product[] = [
       },
       {
         q: "多少钱？",
-        a: "第三方费用按实收，不加价；我们只收少量服务费，具体待定。",
+        a: "域名、邮箱、证书这些第三方费用按实收，我们不加价，只收少量服务费。具体金额会在报价单里一项项列清楚。",
       },
     ],
     priceNote: "成本 + 少量服务费",

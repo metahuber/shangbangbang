@@ -28,8 +28,8 @@ export const site = {
   police: TBD,
 
   /** TBD：联系方式 */
-  phone: TBD,
-  email: TBD,
+  phone: "13412482580",
+  email: "1025274058@qq.com",
   wechatQr: "/images/wechat-qr.png",
 
   /**
